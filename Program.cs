@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace adr
 {
@@ -11,34 +12,39 @@ namespace adr
         public string DefaultValue { get; set; }
         public bool IsRequired { get; set; }
     }
+
+    class PathStatuses
+    {
+        public bool SubPath { get; set; }
+        public bool AdrCounterPath { get; set; }
+        public bool AdrDocPath { get; set; }
+    }
+
     class Program
     {
 
-        const string MarkdownIndexTemplate = @"
-            NEXTADB=0001
-        ";
+        const string MarkdownIndexTemplate = @"NEXTADB=0001";
 
-        const string MarkdownTemplate = @"
-            # {NUMBER}. {TITLE}
+        const string MarkdownTemplate =
+@"# {NUMBER}. {TITLE}
 
-            Date: {DATE}
+Date: {DATE}
 
-            ## Status
+## Status
 
-            {STATUS}
+{STATUS}
 
-            ## Context
+## Context
 
-            {CONTEXT}
+{CONTEXT}
 
-            ## Decision
+## Decision
 
-            {DECISION}
+{DECISION}
 
-            ## Consequences
+## Consequences
 
-            {CONSEQUENCES}
-        ";
+{CONSEQUENCES}";
 
         static Dictionary<string, InputItem> InputItems = new Dictionary<string, InputItem> {
             { "TITLE", new InputItem { QuestionText = "Please enter the title:", IsRequired = true }},
@@ -48,58 +54,135 @@ namespace adr
             { "DECISION", new InputItem { QuestionText = "Please enter the decision:", IsRequired = true }},
             { "CONSEQUENCES", new InputItem { QuestionText = "Please enter the consequences:", IsRequired = true }}
         };
-        const string TitleTemplate = @"{0000}-{title}.md";
+        const string TitleTemplate = @"{NUMBER}-{TITLE}.md";
+        const string TITLE_KEY = "TITLE";
+        static string SubPath = AppContext.BaseDirectory + ".adr";
 
-        static void CreateDirectoryIfDoesNotExist()
+        static string AdrCounterPath = SubPath + @"\adrcounter.txt";
+        static string AdrDocPath = AppContext.BaseDirectory + @"docs\adr";
+
+        static bool ValidateFilePath(string file)
         {
-            var exists = ValidateInit();
-            if (!exists.Item1)
+            return System.IO.File.Exists(file);
+        }
+
+        static bool ValidatePath(string directory)
+        {
+            return System.IO.Directory.Exists(directory);
+        }
+
+        static bool InitializeAdrForRepo(bool createIfDoesNotExist = true)
+        {
+            var statuses = new PathStatuses
             {
-                System.IO.Directory.CreateDirectory(exists.Item2);
-                Console.WriteLine(@"Successfully created ADB data directory. in \.adb");
-            }
-        }
+                SubPath = ValidatePath(SubPath),
+                AdrCounterPath = ValidateFilePath(AdrCounterPath),
+                AdrDocPath = ValidatePath(AdrDocPath)
+            };
 
-        static void CreateMarkdownCounterFile()
-        {
-            var path = ValidateInit();
-            string indexFilePath = path.Item2 + @"\record.txt";
-            var doesIndexFileExist = System.IO.File.Exists(indexFilePath);
-
-            if (doesIndexFileExist)
+            if (statuses.SubPath)
+                Console.WriteLine(@"ADR data directory \.adr already exists, skipping...");
+            else
             {
-                Console.WriteLine($"{ indexFilePath } exists, skipping...");
-                return;
+                if (createIfDoesNotExist)
+                {
+                    System.IO.Directory.CreateDirectory(SubPath);
+                    Console.WriteLine(@"Successfully created ADR data directory \.adr");
+                }
+                else
+                    Console.WriteLine(@"ERROR: ADR data directory does not exist");
             }
 
-            Console.WriteLine($"{ indexFilePath } does not exist, creating...");
-            System.IO.File.WriteAllText(indexFilePath, MarkdownIndexTemplate);
-            Console.WriteLine("Successfully created index file.");
-        }
-        static void InitializeAdrForRepo()
-        {
-            CreateDirectoryIfDoesNotExist();
-            CreateMarkdownCounterFile();
+            if (statuses.AdrCounterPath)
+                Console.WriteLine(@"ADR Counter File already exists, skipping...");
+            else
+            {
+                if (createIfDoesNotExist)
+                {
+                    System.IO.File.WriteAllText(AdrCounterPath, MarkdownIndexTemplate);
+                    Console.WriteLine(@"Successfully created ADR Counter File in \.adr");
+                }
+                else
+                    Console.WriteLine(@"ERROR: ADR counter file does not exist");
+            }
+
+            var docExists = ValidatePath(AdrDocPath);
+            if (docExists)
+            {
+                Console.WriteLine(@"ADR Doc directory already exists, skipping...");
+            }
+            else
+            {
+                if (createIfDoesNotExist)
+                {
+                    System.IO.Directory.CreateDirectory(AdrDocPath);
+                    Console.WriteLine(@"Successfully created ADR Doc directory. in docs\adr");
+                }
+                else
+                    Console.WriteLine(@"ERROR: ADR Doc directory does not exist");
+            }
+
+            //check again after any creation
+            statuses = new PathStatuses
+            {
+                SubPath = ValidatePath(SubPath),
+                AdrCounterPath = ValidateFilePath(AdrCounterPath),
+                AdrDocPath = ValidatePath(AdrDocPath)
+            };
+            return statuses.AdrCounterPath && statuses.AdrDocPath && statuses.SubPath;
         }
 
-        static Tuple<bool, string> ValidateInit(bool reportErrorIfDoesNotExist = false)
+        static string GetAdrSequenceNumber()
         {
-            string subPath = AppContext.BaseDirectory + ".adr";
-            bool exists = System.IO.Directory.Exists(subPath);
-            if (!exists && reportErrorIfDoesNotExist)
-                Console.WriteLine("ERROR: ADR RECORDS MUST BE INITIALZIED, use 'adr init' first.");
-            return new Tuple<bool, string>(exists, subPath);
+            return System.IO.File.ReadAllText(AdrCounterPath).Split("=")[1];
+        }
+
+        static string UpdateAdrToNextInSequence()
+        {
+            var data = System.IO.File.ReadAllText(AdrCounterPath).Split("=");
+            var nextNumString = (Int16.Parse(data[1]) + 1).ToString("0000");
+            var nextSequence = $"{data[0]}={nextNumString}";
+            System.IO.File.WriteAllText(AdrCounterPath, nextSequence);
+            return nextNumString;
+        }
+
+
+        static void WriteAdrRecord(Dictionary<string, InputItem> items)
+        {
+            var nextAdrNumber = GetAdrSequenceNumber();
+            var output = MarkdownTemplate.Replace("{NUMBER}", Int32.Parse(nextAdrNumber).ToString());
+
+            foreach (var item in items)
+            {
+                output = output.Replace($"{{{item.Key}}}", item.Value.Answer);
+            }
+
+            var normalizedTitle = items.First(x => x.Key == TITLE_KEY).Value.Answer.ToLower().Replace(" ", "-").Replace("'", "").Replace(@"""", @"");
+            var fileName = TitleTemplate.Replace("{NUMBER}", nextAdrNumber).Replace("{TITLE}", normalizedTitle);
+
+            System.IO.File.WriteAllText(AdrDocPath + $"\\{fileName}", output);
+
+            var nextNum = UpdateAdrToNextInSequence();
+
+            Console.WriteLine($"Successfully created ADR file {AdrDocPath}\\{fileName}.");
+            Console.WriteLine($"Next number in sequence will be {nextNum}.");
         }
         static void CreateAdrRecord()
         {
+            var fileCheck = InitializeAdrForRepo(false);
+            if (!fileCheck) return;
+
             foreach (var topic in InputItems)
             {
                 do
                 {
                     Console.WriteLine(topic.Value.QuestionText);
-                    topic.Value.Answer = Console.ReadLine();
-                } while (string.IsNullOrEmpty(topic.Value.Answer) && topic.Value.IsRequired)
+                    var consoleRead = Console.ReadLine();
+                    topic.Value.Answer = string.IsNullOrEmpty(consoleRead) ? topic.Value.DefaultValue : consoleRead;
+                } while (string.IsNullOrEmpty(topic.Value.Answer) && topic.Value.IsRequired);
             }
+            WriteAdrRecord(InputItems);
+
             // create the adr record
         }
 
@@ -124,9 +207,7 @@ namespace adr
                     InitializeAdrForRepo();
                     break;
                 case "CREATE":
-                    bool valid = ValidateInit(true).Item1;
-                    if (valid)
-                        CreateAdrRecord();
+                    CreateAdrRecord();
                     break;
                 default:
                     OutputNoCommandInfo();
