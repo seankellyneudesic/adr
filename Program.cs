@@ -56,10 +56,10 @@ Date: {DATE}
         };
         const string TitleTemplate = @"{NUMBER}-{TITLE}.md";
         const string TITLE_KEY = "TITLE";
-        static string SubPath = AppContext.BaseDirectory + ".adr";
+        static string SubPath = Environment.CurrentDirectory + @"\.adr";
 
         static string AdrCounterPath = SubPath + @"\adrcounter.txt";
-        static string AdrDocPath = AppContext.BaseDirectory + @"docs\adr";
+        static string AdrDocPath = Environment.CurrentDirectory + @"\docs\adr";
 
         static bool ValidateFilePath(string file)
         {
@@ -81,45 +81,45 @@ Date: {DATE}
             };
 
             if (statuses.SubPath)
-                Console.WriteLine(@"ADR data directory \.adr already exists, skipping...");
+                Console.WriteLine($"ADR data directory ({SubPath}) already exists, skipping...");
             else
             {
                 if (createIfDoesNotExist)
                 {
                     System.IO.Directory.CreateDirectory(SubPath);
-                    Console.WriteLine(@"Successfully created ADR data directory \.adr");
+                    Console.WriteLine($"Successfully created ADR data directory ({SubPath}) ");
                 }
                 else
-                    Console.WriteLine(@"ERROR: ADR data directory does not exist");
+                    Console.WriteLine($"ERROR: ADR data directory ({SubPath}) does not exist");
             }
 
             if (statuses.AdrCounterPath)
-                Console.WriteLine(@"ADR Counter File already exists, skipping...");
+                Console.WriteLine($"ADR Counter File ({AdrCounterPath}) already exists, skipping...");
             else
             {
                 if (createIfDoesNotExist)
                 {
                     System.IO.File.WriteAllText(AdrCounterPath, MarkdownIndexTemplate);
-                    Console.WriteLine(@"Successfully created ADR Counter File in \.adr");
+                    Console.WriteLine($"Successfully created ADR Counter File at ({AdrCounterPath})");
                 }
                 else
-                    Console.WriteLine(@"ERROR: ADR counter file does not exist");
+                    Console.WriteLine($"ERROR: ADR counter file ({AdrCounterPath}) does not exist");
             }
 
             var docExists = ValidatePath(AdrDocPath);
             if (docExists)
             {
-                Console.WriteLine(@"ADR Doc directory already exists, skipping...");
+                Console.WriteLine($"ADR Doc directory ({AdrDocPath}) already exists, skipping...");
             }
             else
             {
                 if (createIfDoesNotExist)
                 {
                     System.IO.Directory.CreateDirectory(AdrDocPath);
-                    Console.WriteLine(@"Successfully created ADR Doc directory. in docs\adr");
+                    Console.WriteLine($"Successfully created ADR Doc directory. in ({AdrDocPath})");
                 }
                 else
-                    Console.WriteLine(@"ERROR: ADR Doc directory does not exist");
+                    Console.WriteLine($"ERROR: ADR Doc directory ({AdrDocPath}) does not exist");
             }
 
             //check again after any creation
